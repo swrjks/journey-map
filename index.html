@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TerraVue — Satellite to 3D Terrain</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%228%22 fill=%22%23ededed%22/%3E%3Cpath d=%22M5 23l7-10 5 6 3-4 7 8z%22 fill=%22%23111113%22/%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <div class="shell" id="shell">
+      <!-- ================= Sidebar ================= -->
+      <aside class="sidebar" id="sidebar" aria-label="Primary">
+        <div class="sb-head">
+          <div class="logo-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32"><path d="M5 23l7-10 5 6 3-4 7 8z" /></svg>
+          </div>
+          <div class="sb-brand"><strong>TerraVue</strong><span>Terrain intelligence</span></div>
+          <button class="icon-btn sb-collapse" id="sbCollapse" type="button" aria-label="Collapse sidebar"><i data-lucide="panel-left"></i></button>
+        </div>
+
+        <button class="sb-search" type="button" id="sbSearch">
+          <i data-lucide="search"></i><span>Search scenes</span><kbd>Ctrl K</kbd>
+        </button>
+
+        <nav class="sb-nav">
+          <div class="sb-label">Workspace</div>
+          <a class="sb-item" href="#ingest" data-page="ingest" title="Ingest"><i data-lucide="cloud-upload"></i><span>Ingest</span></a>
+          <a class="sb-item" href="#processing" data-page="processing" title="Processing">
+            <i data-lucide="workflow"></i><span>Processing</span><em class="sb-badge" id="sbProcBadge" hidden>Running</em>
+          </a>
+          <a class="sb-item" href="#viewer" data-page="viewer" title="3D Viewer"><i data-lucide="box"></i><span>3D Viewer</span></a>
+          <a class="sb-item" href="#journey" data-page="journey" title="Journey"><i data-lucide="route"></i><span>Journey</span></a>
+
+          <div class="sb-label">Recent scenes</div>
+          <div class="sb-scenes" id="sbScenes"></div>
+        </nav>
+
+        <div class="sb-foot">
+          <div class="sb-health"><span class="led"></span><span>All services operational</span></div>
+          <button class="sb-item" type="button" title="Settings"><i data-lucide="settings"></i><span>Settings</span></button>
+        </div>
+      </aside>
+
+      <!-- ================= Main ================= -->
+      <div class="main">
+        <header class="header">
+          <div class="crumbs">
+            <span>Workspace</span><i data-lucide="chevron-right"></i><strong id="crumbPage">Ingest</strong>
+            <span class="crumb-scene" id="crumbScene" hidden></span>
+          </div>
+          <div class="header-right">
+            <div class="clock" id="clock"></div>
+            <div class="status-pill"><span class="led"></span>Pipeline online</div>
+            <button class="btn btn-secondary viewer-only" id="btnValidate" type="button" disabled><i data-lucide="circle-check"></i>Validate</button>
+            <button class="btn btn-primary viewer-only" id="btnExport" type="button" disabled><i data-lucide="download"></i>Export</button>
+          </div>
+        </header>
+
+        <!-- ========== Ingest page ========== -->
+        <section class="page" id="page-ingest" aria-labelledby="ingestTitle">
+          <div class="page-head">
+            <div>
+              <h1 id="ingestTitle">Ingest imagery</h1>
+              <p>Upload a single optical satellite scene. It is corrected, segmented and converted into a digital surface model.</p>
+            </div>
+          </div>
+
+          <div class="ingest-grid">
+            <div class="panel dz-panel">
+              <div class="scene-head">
+                <div class="scene-title">
+                  <span class="tag" id="pvLevel">L1 · Radiometrically corrected</span>
+                  <strong id="pvName">scene_01.tif</strong>
+                  <span class="muted" id="pvSub">Cartosat-3 MX · 4 bands · 6000 × 6000 px · 287.4 MB</span>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" id="pvReplace"><i data-lucide="folder-open"></i>Replace image</button>
+              </div>
+
+              <div class="dropzone scene-view" id="dropzone" tabindex="0" role="button" aria-label="Input satellite scene. Press Enter to replace it with your own image, or drop a file here.">
+                <div class="pv-stage" id="pvStage">
+                  <canvas id="pvCanvas" width="1024" height="1024" aria-hidden="true"></canvas>
+                  <svg class="pv-grid" id="pvGrid" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true"></svg>
+                  <div class="pv-cursor" id="pvCursor" hidden></div>
+                </div>
+                <div class="pv-chip pv-tl"><i class="led"></i><span id="pvChip">Cartosat-3 · MX · False-colour off</span></div>
+                <div class="pv-chip pv-tr pv-north" aria-hidden="true"><span>N</span><i></i></div>
+                <div class="pv-chip pv-bl mono" id="pvCoord">Hover to read coordinates</div>
+                <div class="pv-scale" aria-hidden="true"><i></i><span>1 km</span></div>
+                <div class="pv-drop" aria-hidden="true"><i data-lucide="cloud-upload"></i><strong>Drop to replace scene</strong></div>
+              </div>
+              <input type="file" id="fileInput" accept="image/*,.tif,.tiff" hidden />
+
+              <dl class="pv-meta" id="pvMeta"></dl>
+
+              <div class="dz-foot">
+                <label class="dem-pick">
+                  <i data-lucide="mountain-snow"></i><span id="demName">Attach reference DEM (optional, PNG)</span>
+                  <input type="file" id="demInput" accept="image/png,image/*" />
+                </label>
+                <div class="dz-actions">
+                <div class="menu-wrap">
+                  <button type="button" class="btn btn-secondary" id="useSample" aria-haspopup="menu" aria-expanded="false" aria-controls="sampleMenu">
+                    <i data-lucide="sparkles"></i>Sample scenes<i data-lucide="chevron-down" class="menu-chev"></i>
+                  </button>
+                  <div class="menu" id="sampleMenu" role="menu" aria-label="Sample scenes" hidden>
+                    <div class="menu-label">Sample scenes</div>
+                    <button type="button" class="menu-item" role="menuitem" data-sample="valley">
+                      <span class="menu-thumb" data-thumb="valley"></span>
+                      <span class="menu-text"><strong>Himalayan valley</strong><span>scene_01.tif · glacial lake, town · 217–1162 m</span></span>
+                    </button>
+                    <button type="button" class="menu-item" role="menuitem" data-sample="forest">
+                      <span class="menu-thumb" data-thumb="forest"></span>
+                      <span class="menu-text"><strong>Forest river basin</strong><span>scene_02.tif · meandering river, dense canopy · 54–385 m</span></span>
+                    </button>
+                  </div>
+                </div>
+                <button type="button" class="btn btn-primary" id="processBtn"><i data-lucide="play"></i>Process scene</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-head"><span>Processing options</span></div>
+              <div class="form">
+                <label class="field"><span>Sensor</span>
+                  <select id="optSensor"><option>Cartosat-3 PAN/MX</option><option>Sentinel-2 MSI (L1C)</option><option>Resourcesat-2 LISS-IV</option><option>PlanetScope SuperDove</option></select>
+                </label>
+                <label class="field"><span>Height reference</span>
+                  <select><option>Copernicus GLO-30</option><option>SRTM 1 arc-second</option><option>CartoDEM v3</option><option>None (relative only)</option></select>
+                </label>
+                <label class="field"><span>Output product</span>
+                  <select><option>Absolute DSM</option><option>Normalised DSM (nDSM)</option><option>Bare-earth DTM</option></select>
+                </label>
+                <label class="field"><span>Target posting</span>
+                  <select><option>0.6 m (native)</option><option>1 m</option><option>5 m</option></select>
+                </label>
+                <div class="field-row">
+                  <span id="optUnc">Uncertainty map</span>
+                  <button class="switch" type="button" role="switch" aria-checked="true" aria-labelledby="optUnc"></button>
+                </div>
+                <div class="field-row">
+                  <span id="optBld">Building-aware refinement</span>
+                  <button class="switch" type="button" role="switch" aria-checked="true" aria-labelledby="optBld"></button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head"><span>Recent scenes</span><span class="muted" id="sceneCount"></span></div>
+            <div class="table-wrap">
+              <table class="table">
+                <thead>
+                  <tr><th>Scene</th><th>Sensor</th><th>Area</th><th>Acquired</th><th>Size</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr>
+                </thead>
+                <tbody id="sceneTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========== Processing page ========== -->
+        <section class="page" id="page-processing" hidden aria-labelledby="procTitle">
+          <div class="page-head">
+            <div>
+              <h1 id="procTitle">Processing</h1>
+              <p id="procSub">No active job</p>
+            </div>
+            <div class="page-actions">
+              <span class="tag tag-muted" id="procStatus">Idle</span>
+              <button type="button" class="btn btn-primary" id="openViewer" disabled><i data-lucide="box"></i><span>Open 3D viewer</span></button>
+            </div>
+          </div>
+
+          <div class="proc-empty panel" id="procEmpty">
+            <div class="empty-icon"><i data-lucide="workflow"></i></div>
+            <strong>No processing job yet</strong>
+            <span>Ingest a scene to start the satellite → DSM pipeline.</span>
+            <a class="btn btn-secondary" href="#ingest"><i data-lucide="cloud-upload"></i>Go to ingest</a>
+          </div>
+
+          <div class="proc-content" id="procContent" hidden>
+            <div class="kpis">
+              <div class="kpi">
+                <span class="kpi-label">Progress</span>
+                <b class="kpi-value" id="procPct">0%</b>
+                <div class="progress"><div class="progress-bar" id="procBar"></div></div>
+              </div>
+              <div class="kpi"><span class="kpi-label">Elapsed</span><b class="kpi-value" id="kElapsed">00:00</b><span class="kpi-sub">GPU inference · simulated</span></div>
+              <div class="kpi"><span class="kpi-label">Tiles processed</span><b class="kpi-value" id="kTiles">0 / 144</b><span class="kpi-sub">512 × 512 px tiles</span></div>
+              <div class="kpi"><span class="kpi-label">Current stage</span><b class="kpi-value kpi-text" id="kStage">Queued</b><span class="kpi-sub" id="kStageN">Stage 0 of 8</span></div>
+            </div>
+
+            <ol class="stepper" id="stepper" aria-label="Pipeline stages"></ol>
+
+            <div class="proc-grid">
+              <div class="panel">
+                <div class="panel-head"><span>Stage outputs</span><span class="muted">Select a result to enlarge</span></div>
+                <div class="stage-grid" id="stageGrid"></div>
+              </div>
+              <div class="proc-side">
+                <div class="panel">
+                  <div class="panel-head"><span>Scene metadata</span></div>
+                  <dl class="kv" id="sceneMeta"></dl>
+                </div>
+                <div class="panel log-panel">
+                  <div class="panel-head"><span>Console</span><span class="muted mono" id="logCount">0 lines</span></div>
+                  <div class="proc-log" id="procLog" aria-live="polite"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========== Journey page ========== -->
+        <section class="page page-journey" id="page-journey" hidden aria-label="Journey map">
+          <div class="journey-host" id="journeyHost">
+            <div class="j-labels" id="journeyLabels"></div>
+            <div class="j-status" id="journeyStatus">Loading…</div>
+            <div class="j-hint">Drag to orbit · scroll to zoom · right-drag to pan</div>
+          </div>
+        </section>
+
+        <!-- ========== Viewer page ========== -->
+        <section class="page page-viewer" id="page-viewer" hidden aria-label="3D viewer">
+          <aside class="v-left">
+            <section class="panel collapsible">
+              <button class="panel-head" type="button" aria-expanded="true"><span>Layers</span><i data-lucide="chevron-up" class="chev"></i></button>
+              <div class="panel-body list">
+                <div class="row layer">
+                  <span class="swatch sw-sat" id="swSat"></span><span class="row-label" id="lblSat">Satellite drape</span>
+                  <button class="switch" type="button" role="switch" aria-checked="false" aria-labelledby="lblSat" data-layer="satellite"></button>
+                </div>
+                <div class="row layer">
+                  <span class="swatch sw-dsm"></span><span class="row-label" id="lblDsm">DSM relief</span>
+                  <button class="switch" type="button" role="switch" aria-checked="true" aria-labelledby="lblDsm" data-layer="dsm"></button>
+                </div>
+                <div class="row layer">
+                  <span class="swatch sw-slope"></span><span class="row-label" id="lblSlope">Slope</span>
+                  <button class="switch" type="button" role="switch" aria-checked="false" aria-labelledby="lblSlope" data-layer="slope"></button>
+                </div>
+                <div class="row layer">
+                  <span class="swatch sw-unc"></span><span class="row-label" id="lblUnc">Uncertainty</span>
+                  <button class="switch" type="button" role="switch" aria-checked="false" aria-labelledby="lblUnc" data-layer="uncertainty"></button>
+                </div>
+                <div class="row layer">
+                  <span class="swatch sw-contour"></span><span class="row-label" id="lblCon">Contours</span>
+                  <button class="switch" type="button" role="switch" aria-checked="false" aria-labelledby="lblCon" data-layer="contours"></button>
+                </div>
+              </div>
+            </section>
+
+            <section class="panel collapsible">
+              <button class="panel-head" type="button" aria-expanded="true"><span>Analysis tools</span><i data-lucide="chevron-up" class="chev"></i></button>
+              <div class="panel-body list">
+                <button class="row tool-item" type="button" data-tool="probe" aria-pressed="false"><i data-lucide="crosshair"></i><span class="row-label">Height probe</span><kbd>H</kbd></button>
+                <button class="row tool-item" type="button" data-tool="distance" aria-pressed="false"><i data-lucide="ruler"></i><span class="row-label">Distance</span><kbd>D</kbd></button>
+                <button class="row tool-item" type="button" data-tool="profile" aria-pressed="false"><i data-lucide="chart-spline"></i><span class="row-label">Profile</span><kbd>P</kbd></button>
+                <button class="row tool-item" type="button" data-tool="clear"><i data-lucide="eraser"></i><span class="row-label">Clear annotations</span></button>
+              </div>
+            </section>
+
+            <section class="panel collapsible">
+              <button class="panel-head" type="button" aria-expanded="true"><span>Scene</span><i data-lucide="chevron-up" class="chev"></i></button>
+              <div class="panel-body">
+                <dl class="kv compact">
+                  <div><dt>CRS</dt><dd>UTM 43N</dd></div>
+                  <div><dt>GSD</dt><dd id="infoGsd">—</dd></div>
+                  <div><dt>Reference</dt><dd>GLO-30</dd></div>
+                  <div><dt>Extent</dt><dd id="infoExtent">—</dd></div>
+                  <div><dt>Elevation</dt><dd id="infoElev">—</dd></div>
+                </dl>
+                <label class="field slim"><span>Product</span>
+                  <select id="modeSelect"><option>Absolute DSM</option><option>Relative nDSM</option><option>DTM (bare earth)</option></select>
+                </label>
+              </div>
+            </section>
+          </aside>
+
+          <main class="viewport panel" id="viewport">
+            <div class="canvas-host" id="canvasHost"></div>
+
+            <div class="legend" id="legend" hidden>
+              <div class="legend-title" id="legendTitle">Elevation</div>
+              <div class="legend-row"><span id="legendMin">0 m</span><span class="legend-bar" id="legendBar"></span><span id="legendMax">2 m</span></div>
+            </div>
+
+            <div class="nav-pills" role="group" aria-label="Navigation mode">
+              <button class="nav-item pill active" type="button" data-nav="orbit" aria-pressed="true"><span class="pill-dot"></span>Orbit</button>
+              <button class="nav-item pill" type="button" data-nav="fly" aria-pressed="false"><span class="pill-dot"></span>Fly-through</button>
+              <button class="nav-item pill" type="button" data-nav="top" aria-pressed="false"><span class="pill-dot"></span>Top-down</button>
+              <button class="nav-item pill" type="button" data-nav="rotate" aria-pressed="false"><span class="pill-dot"></span>Auto-rotate</button>
+            </div>
+
+            <div class="compass" aria-hidden="true"><div class="needle" id="needle"><span class="n">N</span><i></i></div></div>
+
+            <div class="vtoolbar" role="toolbar" aria-label="View controls">
+              <button type="button" class="vt-btn" id="vtLayers" aria-label="Toggle satellite drape" title="Satellite drape"><i data-lucide="layers"></i></button>
+              <button type="button" class="vt-btn" id="vtFull" aria-label="Fullscreen" title="Fullscreen"><i data-lucide="scan"></i></button>
+              <button type="button" class="vt-btn" id="vtHome" aria-label="Reset view" title="Reset view"><i data-lucide="locate-fixed"></i></button>
+              <span class="vt-sep"></span>
+              <button type="button" class="vt-btn" id="vtIn" aria-label="Zoom in" title="Zoom in"><i data-lucide="plus"></i></button>
+              <button type="button" class="vt-btn" id="vtOut" aria-label="Zoom out" title="Zoom out"><i data-lucide="minus"></i></button>
+            </div>
+
+            <div class="readout" id="readout" hidden>
+              <span><em>E</em><b id="roE">—</b></span><span><em>N</em><b id="roN">—</b></span><span><em>Z</em><b id="roZ">—</b></span>
+            </div>
+            <div class="hint" id="hint" hidden></div>
+
+            <div class="empty" id="empty">
+              <div class="empty-icon"><i data-lucide="box"></i></div>
+              <h2>No scene loaded</h2>
+              <p>Ingest a satellite image to generate a DSM and explore it in 3D.</p>
+              <a class="btn btn-primary" href="#ingest"><i data-lucide="cloud-upload"></i>Go to ingest</a>
+            </div>
+          </main>
+
+          <aside class="v-right">
+            <section class="panel">
+              <div class="panel-head"><span>Validation</span><span class="tag tag-muted" id="valTag">Not run</span></div>
+              <div class="panel-body">
+                <div class="metrics">
+                  <div class="metric"><span>RMSE</span><b id="mRmse">—</b></div>
+                  <div class="metric"><span>MAE</span><b id="mMae">—</b></div>
+                  <div class="metric"><span>LE90</span><b id="mR">—</b></div>
+                </div>
+                <div class="scatter-wrap">
+                  <span class="y-title">Predicted (m)</span>
+                  <canvas id="scatter" aria-label="Predicted versus reference height scatter plot" role="img"></canvas>
+                </div>
+                <div class="x-title">Reference height (m)</div>
+              </div>
+            </section>
+
+            <section class="panel" id="hazardCard">
+              <div class="panel-head"><span>Hazard simulation</span><span class="tag tag-muted" id="hzTag">Idle</span></div>
+              <div class="panel-body">
+                <div class="menu-wrap hz-picker">
+                  <button type="button" class="hz-btn" id="hzBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="hzMenu">
+                    <span class="hz-ico" id="hzIco"><i data-lucide="waves"></i></span>
+                    <span class="hz-name"><strong id="hzName">Flood</strong><span id="hzDesc">Water-level rise</span></span>
+                    <i data-lucide="chevron-down" class="menu-chev"></i>
+                  </button>
+                  <div class="menu hz-menu" id="hzMenu" role="menu" aria-label="Hazard type" hidden>
+                    <button type="button" class="menu-item" role="menuitem" data-hz="flood">
+                      <span class="hz-ico hz-flood"><i data-lucide="waves"></i></span>
+                      <span class="menu-text"><strong>Flood</strong><span>Raise the water level across the valley</span></span>
+                    </button>
+                    <button type="button" class="menu-item" role="menuitem" data-hz="rain">
+                      <span class="hz-ico hz-rain"><i data-lucide="cloud-rain"></i></span>
+                      <span class="menu-text"><strong>Localized rainfall</strong><span>Storm cell over an area · runoff routing</span></span>
+                    </button>
+                    <button type="button" class="menu-item" role="menuitem" data-hz="fire">
+                      <span class="hz-ico hz-fire"><i data-lucide="flame"></i></span>
+                      <span class="menu-text"><strong>Wildfire</strong><span>Spread driven by fuel, wind and slope</span></span>
+                    </button>
+                    <button type="button" class="menu-item" role="menuitem" data-hz="landslide">
+                      <span class="hz-ico hz-slide"><i data-lucide="mountain"></i></span>
+                      <span class="menu-text"><strong>Landslide</strong><span>Susceptibility map · debris runout</span></span>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="flood-big"><b id="hzBig">+0.0 m</b><span id="hzBigLabel">water-level rise</span></div>
+
+                <!-- Flood controls -->
+                <div class="hz-ctrl" data-for="flood">
+                  <div class="flood-ctrl">
+                    <button type="button" class="icon-btn boxed" id="floodPlay" aria-label="Play flood simulation" disabled><i data-lucide="play"></i></button>
+                    <input type="range" id="floodRange" min="0" max="18" step="0.1" value="0" disabled aria-label="Water rise in metres" />
+                  </div>
+                </div>
+
+                <!-- Rain controls -->
+                <div class="hz-ctrl" data-for="rain" hidden>
+                  <label class="hz-row"><span>Intensity</span><output id="rainIVal">60 mm/h</output>
+                    <input type="range" id="rainI" min="10" max="120" step="5" value="60" /></label>
+                  <label class="hz-row"><span>Storm radius</span><output id="rainRVal">500 m</output>
+                    <input type="range" id="rainR" min="200" max="900" step="50" value="500" /></label>
+                </div>
+
+                <!-- Fire controls -->
+                <div class="hz-ctrl" data-for="fire" hidden>
+                  <div class="hz-row">
+                    <span id="windLbl">Wind from</span>
+                    <div class="wind-grid" role="radiogroup" aria-labelledby="windLbl" id="windGrid">
+                      <button type="button" data-w="NW" aria-label="North-west">NW</button><button type="button" data-w="N" aria-label="North">N</button><button type="button" data-w="NE" aria-label="North-east">NE</button>
+                      <button type="button" data-w="W" aria-label="West">W</button><span class="wind-c" aria-hidden="true"><i data-lucide="wind"></i></span><button type="button" data-w="E" aria-label="East">E</button>
+                      <button type="button" data-w="SW" aria-label="South-west" class="on">SW</button><button type="button" data-w="S" aria-label="South">S</button><button type="button" data-w="SE" aria-label="South-east">SE</button>
+                    </div>
+                  </div>
+                  <label class="hz-row"><span>Wind speed</span><output id="windSVal">20 km/h</output>
+                    <input type="range" id="windS" min="0" max="50" step="1" value="20" /></label>
+                </div>
+
+                <!-- Landslide controls -->
+                <div class="hz-ctrl" data-for="landslide" hidden>
+                  <div class="sus-legend"><span>Low</span><i></i><span>High susceptibility</span></div>
+                </div>
+
+                <div class="hz-actions" id="hzActions" hidden>
+                  <button type="button" class="btn btn-primary btn-sm" id="hzPlay"><i data-lucide="play"></i><span>Start</span></button>
+                  <button type="button" class="btn btn-secondary btn-sm" id="hzPlace" aria-pressed="false"><i data-lucide="crosshair"></i><span>Place</span></button>
+                  <button type="button" class="icon-btn boxed" id="hzReset" aria-label="Reset simulation" title="Reset"><i data-lucide="rotate-ccw"></i></button>
+                </div>
+
+                <div class="flood-stats" id="hzStats">
+                  <div><span>Inundated</span><b id="fsArea">0.00 km²</b></div>
+                  <div><span>Max depth</span><b id="fsDepth">0.0 m</b></div>
+                  <div><span>Structures</span><b id="fsBld">0</b></div>
+                </div>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head"><span>Land cover</span><span class="muted">U-Net · 6 classes</span></div>
+              <div class="panel-body"><ul class="bars" id="landCover"><li class="muted">—</li></ul></div>
+            </section>
+          </aside>
+
+          <section class="panel profile">
+            <div class="profile-head">
+              <div class="panel-title">Elevation profile</div>
+              <div class="profile-stats" id="profileStats"></div>
+              <div class="seg" role="group" aria-label="Profile mode">
+                <button type="button" class="seg-btn active" id="profAlong" aria-pressed="true"><i data-lucide="trending-up"></i>Along path</button>
+                <button type="button" class="seg-btn" id="profP2P" aria-pressed="false"><i data-lucide="spline"></i>Point to point</button>
+              </div>
+            </div>
+            <canvas id="profile" aria-label="Elevation profile chart" role="img"></canvas>
+          </section>
+        </section>
+
+        <!-- ========== Status bar ========== -->
+        <footer class="statusbar">
+          <div class="st-cell"><span>Scene</span><b id="stScene">—</b></div>
+          <div class="st-cell"><span>Pipeline</span><b id="stPipe"><i class="led idle"></i>Idle</b></div>
+          <div class="st-cell"><span>Model</span><b>DSMNet v0.3 · U-Net seg</b></div>
+          <div class="st-cell"><span>Reference DEM</span><b>Copernicus GLO-30</b></div>
+          <div class="st-cell"><span>Renderer</span><b>WebGL 2 · Three.js</b></div>
+          <div class="st-cell"><span>Last update</span><b id="stUpdate">—</b></div>
+        </footer>
+      </div>
+    </div>
+
+    <!-- Stage image lightbox -->
+    <div class="lightbox" id="lightbox" hidden>
+      <figure role="dialog" aria-modal="true" aria-labelledby="lbTitle">
+        <div class="lb-head"><strong id="lbTitle"></strong><button type="button" class="icon-btn" id="lbClose" aria-label="Close"><i data-lucide="x"></i></button></div>
+        <div class="lb-img" id="lbImg"></div>
+        <figcaption id="lbMeta"></figcaption>
+      </figure>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
